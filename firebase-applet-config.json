@@ -1,10 +1,10 @@
 {
-  "projectId": "remixed-project-id",
-  "appId": "remixed-app-id",
-  "apiKey": "remixed-api-key",
-  "authDomain": "remixed-auth-domain",
-  "firestoreDatabaseId": "remixed-firestore-database-id",
-  "storageBucket": "remixed-storage-bucket",
-  "messagingSenderId": "remixed-messaging-sender-id",
-  "measurementId": "remixed-measurement-id"
+  "projectId": "education-dz-lab",
+  "appId": "1:507740772254:web:80b99ef42dbb5e1e33a88f",
+  "apiKey": "AIzaSyBp5_StPcZz7Imvvk879yNPS8KfdLmO8cw",
+  "authDomain": "education-dz-lab.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-09684f87-cf0f-4902-852b-58e4e93f91b6",
+  "storageBucket": "education-dz-lab.firebasestorage.app",
+  "messagingSenderId": "507740772254",
+  "measurementId": ""
 }
