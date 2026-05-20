@@ -77,7 +77,14 @@ export async function testFirestoreConnection(retries = 3) {
       console.warn(`Firebase: Connection test attempt ${i + 1} failed:`, error.message);
       
       // If we are reaching the server but blocked by rules, we are connected!
-      if (error.code === 'permission-denied' || error.message.includes('permission') || error.message.includes('Missing or insufficient permissions')) {
+      const errStr = (error.message || '').toLowerCase();
+      const errCode = (error.code || '').toLowerCase();
+      
+      if (errCode === 'permission-denied' || 
+          errStr.includes('permission') || 
+          errStr.includes('missing or insufficient') ||
+          errCode === 'unauthenticated' ||
+          errCode === 'failed-precondition' ) {
         console.log(`Firebase: Connection test passed via permission denial (server reached).`);
         return true;
       }

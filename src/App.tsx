@@ -75,24 +75,24 @@ export default function App() {
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Test connection on mount with a small delay to allow SDK initialization
-    const timer = setTimeout(() => {
-      testFirestoreConnection(2).then(ok => {
-        if (!ok) {
-          // Only show error if we are certain it's a persistent issue
-          setConnectionError('تنبيه: تعذر الاتصال بخادم Firestore. قد تكون البيانات غير محدثة أو النطاق (Domain) غير مضاف في الإعدادات.');
-        }
-      });
-    }, 1500);
-
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (!currentUser) setSetupComplete(true); 
       setLoading(false);
+      
+      // Test connection after auth state is known with a small delay
+      setTimeout(() => {
+        if (currentUser) {
+           testFirestoreConnection(2).then(ok => {
+             if (!ok) {
+               setConnectionError('تنبيه: تعذر الاتصال بخادم Firestore. قد تكون البيانات غير محدثة أو النطاق (Domain) غير مضاف في الإعدادات.');
+             }
+           });
+        }
+      }, 500);
     });
     return () => {
       unsubscribe();
-      clearTimeout(timer);
     };
   }, []);
 
