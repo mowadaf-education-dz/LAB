@@ -1,4 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebase';
+import { Type } from "@google/genai";
 
 export interface ChemicalIntelligence {
   nameEn: string;
@@ -13,18 +15,8 @@ export interface ChemicalIntelligence {
 }
 
 export async function ensureApiKey(): Promise<boolean> {
-  if (process.env.API_KEY || process.env.GEMINI_API_KEY) return true;
-  
-  if (typeof window !== 'undefined' && (window as any).aistudio?.openSelectKey) {
-    const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-    if (!hasKey) {
-      await (window as any).aistudio.openSelectKey();
-      // After selecting, check again
-      return await (window as any).aistudio.hasSelectedApiKey();
-    }
-    return true;
-  }
-  return false;
+  // Now using Firebase Cloud Functions, API key is server-side.
+  return true;
 }
 
 export async function getChemicalIntelligence(name: string, retries = 5, delay = 3000): Promise<ChemicalIntelligence | null> {
@@ -35,10 +27,8 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
       return null;
     }
 
-    // Initialize GoogleGenAI inside the function to ensure the most up-to-date API key is used
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
-    
-    const response = await ai.models.generateContent({
+    const callGemini = httpsCallable(functions, 'generateContent');
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `Provide detailed chemical information for: "${name}". 
       Return the data in JSON format with the following fields:
@@ -71,7 +61,7 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
       },
     });
 
-    const text = response.text;
+    const text = (response.data as any).text;
     if (!text) return null;
     return JSON.parse(text.trim()) as ChemicalIntelligence;
   } catch (error: any) {
@@ -130,7 +120,7 @@ export async function analyzeChemicalStorage(inventory: any[], retries = 3, dela
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
     // Format the inventory slightly to save tokens
     const compactInventory = inventory.map(c => ({
@@ -141,7 +131,7 @@ export async function analyzeChemicalStorage(inventory: any[], retries = 3, dela
       shelf: c.shelf || "Unassigned"
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are an expert in chemical laboratory safety and storage matrices. 
       Analyze the provided laboratory chemical inventory and its current physical shelf locations.
@@ -192,8 +182,9 @@ export async function analyzeChemicalStorage(inventory: any[], retries = 3, dela
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as StorageAnalysisResult;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as StorageAnalysisResult;
   } catch (error: any) {
     if ((error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -216,8 +207,8 @@ export async function getEquipmentIntelligence(items: { id: string; name: string
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
-    const response = await ai.models.generateContent({
+    const callGemini = httpsCallable(functions, 'generateContent');
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `Analyze these laboratory equipment items and provide: 
       1. A better Arabic name (smartNameAr).
@@ -242,7 +233,8 @@ export async function getEquipmentIntelligence(items: { id: string; name: string
       }
     });
 
-    return JSON.parse(response.text);
+    const text = (response.data as any).text;
+    return JSON.parse(text);
   } catch (err: any) {
     const errorMessage = err.message || String(err);
     if (errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
@@ -283,7 +275,7 @@ export async function analyzeMaintenance(logs: any[], retries = 3, delay = 5000)
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
     const compactLogs = logs.map(l => ({
       equipmentName: l.equipmentName,
@@ -293,7 +285,7 @@ export async function analyzeMaintenance(logs: any[], retries = 3, delay = 5000)
       date: l.startDate
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are an expert laboratory technician and maintenance manager in Algeria. 
       Analyze the provided equipment maintenance logs for a high school laboratory.
@@ -336,8 +328,9 @@ export async function analyzeMaintenance(logs: any[], retries = 3, delay = 5000)
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as MaintenanceInsight;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as MaintenanceInsight;
   } catch (error: any) {
     if ((error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -358,9 +351,9 @@ export async function findSmartForm(query: string, availableForms: {title: strin
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
     
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are an intelligent assistant for a laboratory management system in Algeria.
       The user is asking for a specific document, form, or process.
@@ -386,8 +379,9 @@ export async function findSmartForm(query: string, availableForms: {title: strin
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as FormRecommendation;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as FormRecommendation;
   } catch (error: any) {
     console.error("Error finding smart form:", error);
     return null;
@@ -410,7 +404,7 @@ export async function analyzePedagogicalTracking(entries: any[], retries = 3, de
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
     // Format lightly to save tokens
     const compactEntries = entries.map(e => ({
@@ -424,7 +418,7 @@ export async function analyzePedagogicalTracking(entries: any[], retries = 3, de
       delayReason: e.delayReason
     }));
 
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are an expert pedagogical inspector and school director in Algeria. 
       Analyze the provided pedagogical progression tracking data for a high school.
@@ -467,8 +461,9 @@ export async function analyzePedagogicalTracking(entries: any[], retries = 3, de
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as PedagogicalInsight;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as PedagogicalInsight;
   } catch (error: any) {
     if ((error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -491,9 +486,9 @@ export async function analyzeIncident(incident: any, retries = 3, delay = 5000):
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are a laboratory safety expert in Algeria. 
       Analyze this laboratory incident and provide a professional investigation report.
@@ -523,8 +518,9 @@ export async function analyzeIncident(incident: any, retries = 3, delay = 5000):
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as IncidentAnalysis;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as IncidentAnalysis;
   } catch (error: any) {
     if ((error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -540,7 +536,7 @@ export async function chatWithLabAssistant(messages: { role: 'user' | 'model', p
     const hasKey = await ensureApiKey();
     if (!hasKey) return "لم يتم تمكين مفتاح API. يرجى مراجعة الإعدادات.";
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
     // System instruction for the chat
     const systemPrompt = `You are "Mekhbari AI" (مخبري الذكي), an expert laboratory assistant specialized in the Algerian education system (Middle and High School). 
@@ -560,12 +556,13 @@ export async function chatWithLabAssistant(messages: { role: 'user' | 'model', p
     const contents = messages.map(m => `${m.role === 'user' ? 'User' : 'Model'}: ${m.parts}`).join('\n');
     const fullPrompt = `${systemPrompt}\n\nConversation history:\n${contents}\n\nModel response:`;
 
-    const result = await ai.models.generateContent({
+    const result = await callGemini({
       model: "gemini-1.5-flash",
       contents: fullPrompt
     });
 
-    return result.text || "عذراً، لم أتمكن من توليد إجابة.";
+    const text = (result.data as any).text;
+    return text || "عذراً، لم أتمكن من توليد إجابة.";
   } catch (error) {
     console.error("Lab Assistant Chat Error:", error);
     return "عذراً، حدث خطأ أثناء الاتصال بالمساعد الذكي. يرجى المحاولة لاحقاً.";
@@ -577,9 +574,9 @@ export async function analyzeLabImage(base64Image: string) {
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
-    const result = await ai.models.generateContent({
+    const result = await callGemini({
       model: "gemini-1.5-flash",
       contents: [
         {
@@ -600,7 +597,8 @@ export async function analyzeLabImage(base64Image: string) {
       }
     });
 
-    return JSON.parse(result.text || '{}');
+    const text = (result.data as any).text;
+    return JSON.parse(text || '{}');
   } catch (error) {
     console.error("AI Image Analysis Error:", error);
     return null;
@@ -619,9 +617,9 @@ export async function analyzeExperiment(expData: any, retries = 3, delay = 5000)
     const hasKey = await ensureApiKey();
     if (!hasKey) return null;
 
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || process.env.GEMINI_API_KEY || '' });
+    const callGemini = httpsCallable(functions, 'generateContent');
     
-    const response = await ai.models.generateContent({
+    const response = await callGemini({
       model: "gemini-3-flash-preview",
       contents: `You are an expert laboratory technician in Algeria. 
       Review this laboratory experiment and provide a professional summary and safety guidance.
@@ -661,8 +659,9 @@ export async function analyzeExperiment(expData: any, retries = 3, delay = 5000)
       }
     });
 
-    if (!response.text) return null;
-    return JSON.parse(response.text.trim()) as ExperimentAnalysis;
+    const text = (response.data as any).text;
+    if (!text) return null;
+    return JSON.parse(text.trim()) as ExperimentAnalysis;
   } catch (error: any) {
     if ((error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429) && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));

@@ -3,10 +3,13 @@ import { getAuth, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { initializeFirestore, persistentLocalCache, getFirestore, doc, getDocFromServer, collection, setLogLevel } from 'firebase/firestore';
 import { getStorage } from 'firebase/storage';
 import { getAnalytics } from 'firebase/analytics';
+import { getFunctions } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
+export const functions = getFunctions(app);
+
 // Initialize Firestore with explicit database ID from config if present
 const databaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
 console.log('[Firebase Info] Project ID:', firebaseConfig.projectId);
