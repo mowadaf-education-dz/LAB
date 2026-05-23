@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect, useTransition } from 'react';
+import { logger } from '../services/loggingService';
 import { onSnapshot, Query, DocumentData } from 'firebase/firestore';
 
 interface UseFirestoreCollectionResult<T> {
@@ -42,7 +43,7 @@ export function useFirestoreCollection<T = DocumentData>(
       },
       (err) => {
         if (!mounted) return;
-        console.error("Firestore onSnapshot error:", err);
+        logger.error("Firestore onSnapshot error:", err);
         setError(err);
         setLoading(false);
       }

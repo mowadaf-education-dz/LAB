@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { logger } from '../services/loggingService';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 
@@ -59,7 +60,7 @@ export function SchoolProvider({ children }: { children: React.ReactNode }) {
           
           return () => unsubSettings();
         } catch (err) {
-          console.error("Error setting up settings listener:", err);
+          logger.error("Error setting up settings listener:", err);
           setLoading(false);
         }
       } else {

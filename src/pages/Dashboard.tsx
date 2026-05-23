@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { logger } from '../services/loggingService';
 import { useSchool } from '../context/SchoolContext';
 import { onSnapshot, query, where, doc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { db, handleFirestoreError, OperationType, getUserCollection, auth, checkIsAdmin } from '../firebase';
@@ -61,6 +62,69 @@ import {
   Pie
 } from 'recharts';
 
+
+import React from 'react';
+// ── أنواع TypeScript لأنماط البيانات ─────────────────────────────────────
+interface Report {
+  id: string;
+  createdAt?: { seconds: number };
+  date?: string;
+  className?: string;
+  teacherName?: string;
+  observations?: string;
+}
+
+interface ChemicalItem {
+  id: string;
+  nameAr?: string;
+  nameEn?: string;
+  quantity?: number;
+  expiryDate?: string;
+}
+
+interface GraphDataPoint {
+  name: string;
+  count: number;
+}
+// ─────────────────────────────────────────────────────────────────────────
+
+// ── مكوّن StatCard معزول بـ React.memo لتفادي إعادة الرسم غير الضرورية ──
+interface StatCardProps {
+  label: string; value: string; trend: string;
+  icon: React.ElementType; color: string; path: string;
+  onClick: () => void;
+}
+const StatCard = memo(({ label, value, trend, icon: Icon, color, onClick }: StatCardProps) => (
+  <motion.div
+    initial={{ opacity: 0, scale: 0.95 }}
+    animate={{ opacity: 1, scale: 1 }}
+    onClick={onClick}
+    className={cn(
+      "p-8 rounded-md3-card transition-all duration-300 ease-out group relative cursor-pointer shadow-ambient hover:shadow-ambient-hover hover:-translate-y-[2px]",
+      color
+    )}
+  >
+    <div className="absolute top-0 left-0 w-24 h-24 bg-surface/40 rounded-br-[80px] -ml-6 -mt-6 group-hover:scale-150 transition-transform duration-700" />
+    <div className="relative z-10 flex justify-between items-start mb-6">
+      <div className="p-4 bg-surface rounded-[16px] shadow-sm text-primary group-hover:bg-primary group-hover:text-on-primary transition-colors duration-300">
+        <Icon size={24} />
+      </div>
+      <span className={cn(
+        "text-[0.6875rem] font-black px-4 py-1.5 rounded-full shadow-sm tracking-widest",
+        label === 'تنبيهات النظام الحرجة' ? "bg-error text-on-error" : "bg-surface text-primary"
+      )}>
+        {trend}
+      </span>
+    </div>
+    <div className="relative z-10">
+      <p className="text-[0.875rem] text-on-surface/80 font-bold mb-1">{label}</p>
+      <span className="text-[3.5rem] leading-none font-black text-primary group-hover:scale-105 transition-transform inline-block origin-right font-sans" dir="ltr">{value}</span>
+    </div>
+  </motion.div>
+));
+StatCard.displayName = 'StatCard';
+// ────────────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
   const { schoolId } = useSchool();
   const navigate = useNavigate();
@@ -79,9 +143,9 @@ export default function Dashboard() {
     expiringSoon: 0
   });
 
-  const [graphData, setGraphData] = useState<any[]>([]);
-  const [recentReports, setRecentReports] = useState<any[]>([]);
-  const [expiringItems, setExpiringItems] = useState<any[]>([]);
+  const [graphData, setGraphData] = useState<GraphDataPoint[]>([]);
+  const [recentReports, setRecentReports] = useState<Report[]>([]);
+  const [expiringItems, setExpiringItems] = useState<ChemicalItem[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
@@ -93,7 +157,7 @@ export default function Dashboard() {
       setCounts(prev => ({ ...prev, reports: snap.size }));
       const reports = snap.docs
         .map(doc => ({ id: doc.id, ...doc.data() }))
-        .sort((a: any, b: any) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
+        .sort((a: Report, b: Report) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0))
         .slice(0, 3);
       setRecentReports(reports);
     }, (err) => handleFirestoreError(err, OperationType.LIST, 'reports'));
@@ -146,7 +210,7 @@ export default function Dashboard() {
     const unsubIncidents = onSnapshot(getUserCollection(schoolId, 'safety_incidents'), (snap) => {
       setCounts(prev => ({ ...prev, incidents: snap.size }));
     }, (err) => {
-      console.warn('Dashboard: Failed to load incidents', err);
+      logger.warn('Dashboard: Failed to load incidents', err);
       // Don't crash the whole app if incidents fail
     });
 
@@ -279,8 +343,9 @@ export default function Dashboard() {
         }
 
         setNotification({ message: `تم استيراد ${totalImported} سجل بنجاح من كافة الصفحات!`, type: 'success' });
+        setTimeout(() => setNotification(null), 4000);
       } catch (error) {
-        console.error('Error importing XLS:', error);
+        logger.error('Error importing XLS:', error);
         setNotification({ message: 'حدث خطأ أثناء استيراد الملف. يرجى التأكد من أن البيانات تطابق النموذج.', type: 'error' });
       } finally {
         setIsImporting(false);
@@ -355,8 +420,9 @@ export default function Dashboard() {
       }
 
       setNotification({ message: 'تم التحديث الذكي للمخزون بنجاح!', type: 'success' });
+      setTimeout(() => setNotification(null), 4000);
     } catch (error) {
-      console.error('Error in smart update:', error);
+      logger.error('Error in smart update:', error);
       setNotification({ message: 'حدث خطأ أثناء التحديث الذكي. يرجى المحاولة لاحقاً.', type: 'error' });
     } finally {
       setIsSmartUpdating(false);
@@ -445,9 +511,10 @@ export default function Dashboard() {
       XLSX.utils.book_append_sheet(wb, wsTeachers, "Teachers");
 
       XLSX.writeFile(wb, `Lab_Full_Data_Template.xlsx`);
-      setNotification({ message: 'تم تحميل كافة البيانات في ملف XLS بنجاح! يمكنك الآن تعديلها وإعادة استيرادها.', type: 'success' });
+      setNotification({ message: 'تم تحميل كافة البيانات في ملف XLS بنجاح!', type: 'success' });
+      setTimeout(() => setNotification(null), 4000);
     } catch (error) {
-      console.error('Error exporting data template:', error);
+      logger.error('Error exporting data template:', error);
       handleFirestoreError(error, OperationType.LIST, 'export_process');
       setNotification({ message: 'حدث خطأ أثناء تصدير البيانات. يرجى التأكد من اتصالك بالإنترنت وصلاحيات الدخول.', type: 'error' });
     }

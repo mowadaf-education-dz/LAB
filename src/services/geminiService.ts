@@ -1,4 +1,10 @@
 import { Type } from "@google/genai";
+import { logger } from './loggingService';
+
+// ── اسم الموديل في مكان واحد — غيّره هنا فقط إذا احتجت ─────────────────────
+const GEMINI_MODEL = "gemini-2.0-flash";
+const GEMINI_MODEL_VISION = "gemini-1.5-flash"; // للصور والمحادثة
+// ────────────────────────────────────────────────────────────────────────────
 
 async function callGeminiAPI(reqBody: any) {
   const res = await fetch('/api/gemini', {
@@ -38,13 +44,13 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
   try {
     const hasKey = await ensureApiKey();
     if (!hasKey) {
-      console.error("No API key available for Gemini.");
+      logger.error("No API key available for Gemini.");
       return null;
     }
 
     const callGemini = httpsCallable(functions, 'generateContent');
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `Provide detailed chemical information for: "${name}". 
       Return the data in JSON format with the following fields:
       - nameEn: English name
@@ -87,13 +93,13 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
     if (error?.status === 'RESOURCE_EXHAUSTED' || error?.code === 429 || isQuotaExceeded) {
       // If it's a hard quota limit (daily/monthly), retrying won't help immediately
       if (errorMessage.includes("check your plan and billing details") || errorMessage.includes("Hard quota limit reached")) {
-        console.error("Hard quota limit reached. Please check your Gemini API billing/plan.");
+        logger.error("Hard quota limit reached. Please check your Gemini API billing/plan.");
         
         // If the user hasn't selected their own key, prompt them to do so
         if (typeof window !== 'undefined' && (window as any).aistudio?.openSelectKey) {
           const hasKey = await (window as any).aistudio.hasSelectedApiKey();
           if (!hasKey) {
-            console.warn("Prompting user to select their own API key due to quota exhaustion.");
+            logger.warn("Prompting user to select their own API key due to quota exhaustion.");
             await (window as any).aistudio.openSelectKey();
             // After selecting a key, we can try one more time
             return getChemicalIntelligence(name, 1, delay);
@@ -103,13 +109,13 @@ export async function getChemicalIntelligence(name: string, retries = 5, delay =
       }
 
       if (retries > 0) {
-        console.warn(`Rate limit hit for "${name}". Retrying in ${delay}ms... (${retries} retries left)`);
+        logger.warn(`Rate limit hit for "${name}". Retrying in ${delay}ms... (${retries} retries left)`);
         await new Promise(resolve => setTimeout(resolve, delay));
         return getChemicalIntelligence(name, retries - 1, delay * 1.5);
       }
     }
     
-    console.error("Error fetching chemical intelligence:", error);
+    logger.error("Error fetching chemical intelligence:", error);
     return null;
   }
 }
@@ -147,7 +153,7 @@ export async function analyzeChemicalStorage(inventory: any[], retries = 3, dela
     }));
 
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are an expert in chemical laboratory safety and storage matrices. 
       Analyze the provided laboratory chemical inventory and its current physical shelf locations.
       
@@ -205,7 +211,7 @@ export async function analyzeChemicalStorage(inventory: any[], retries = 3, dela
       await new Promise(resolve => setTimeout(resolve, delay));
       return analyzeChemicalStorage(inventory, retries - 1, delay * 1.5);
     }
-    console.error("Error analyzing chemical storage:", error);
+    logger.error("Error analyzing chemical storage:", error);
     return null;
   }
 }
@@ -224,7 +230,7 @@ export async function getEquipmentIntelligence(items: { id: string; name: string
 
     const callGemini = httpsCallable(functions, 'generateContent');
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `Analyze these laboratory equipment items and provide: 
       1. A better Arabic name (smartNameAr).
       2. A concise Arabic description (smartDescriptionAr).
@@ -254,7 +260,7 @@ export async function getEquipmentIntelligence(items: { id: string; name: string
     const errorMessage = err.message || String(err);
     if (errorMessage.includes("429") || errorMessage.includes("quota") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
       if (retries > 0) {
-        console.warn(`Quota exceeded for equipment. Retrying in ${delay/1000}s...`);
+        logger.warn(`Quota exceeded for equipment. Retrying in ${delay/1000}s...`);
         await new Promise(r => setTimeout(r, delay));
         return getEquipmentIntelligence(items, retries - 1, delay * 2);
       }
@@ -269,7 +275,7 @@ export async function getEquipmentIntelligence(items: { id: string; name: string
         }
       }
     }
-    console.error("Error fetching equipment intelligence:", err);
+    logger.error("Error fetching equipment intelligence:", err);
     return null;
   }
 }
@@ -301,7 +307,7 @@ export async function analyzeMaintenance(logs: any[], retries = 3, delay = 5000)
     }));
 
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are an expert laboratory technician and maintenance manager in Algeria. 
       Analyze the provided equipment maintenance logs for a high school laboratory.
       
@@ -351,7 +357,7 @@ export async function analyzeMaintenance(logs: any[], retries = 3, delay = 5000)
       await new Promise(resolve => setTimeout(resolve, delay));
       return analyzeMaintenance(logs, retries - 1, delay * 1.5);
     }
-    console.error("Error analyzing maintenance logs:", error);
+    logger.error("Error analyzing maintenance logs:", error);
     return null;
   }
 }
@@ -369,7 +375,7 @@ export async function findSmartForm(query: string, availableForms: {title: strin
     const callGemini = httpsCallable(functions, 'generateContent');
     
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are an intelligent assistant for a laboratory management system in Algeria.
       The user is asking for a specific document, form, or process.
       Match their request to one of the available forms.
@@ -398,7 +404,7 @@ export async function findSmartForm(query: string, availableForms: {title: strin
     if (!text) return null;
     return JSON.parse(text.trim()) as FormRecommendation;
   } catch (error: any) {
-    console.error("Error finding smart form:", error);
+    logger.error("Error finding smart form:", error);
     return null;
   }
 }
@@ -434,7 +440,7 @@ export async function analyzePedagogicalTracking(entries: any[], retries = 3, de
     }));
 
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are an expert pedagogical inspector and school director in Algeria. 
       Analyze the provided pedagogical progression tracking data for a high school.
       
@@ -484,7 +490,7 @@ export async function analyzePedagogicalTracking(entries: any[], retries = 3, de
       await new Promise(resolve => setTimeout(resolve, delay));
       return analyzePedagogicalTracking(entries, retries - 1, delay * 1.5);
     }
-    console.error("Error analyzing pedagogical tracking:", error);
+    logger.error("Error analyzing pedagogical tracking:", error);
     return null;
   }
 }
@@ -504,7 +510,7 @@ export async function analyzeIncident(incident: any, retries = 3, delay = 5000):
     const callGemini = httpsCallable(functions, 'generateContent');
     
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are a laboratory safety expert in Algeria. 
       Analyze this laboratory incident and provide a professional investigation report.
       
@@ -541,7 +547,7 @@ export async function analyzeIncident(incident: any, retries = 3, delay = 5000):
       await new Promise(resolve => setTimeout(resolve, delay));
       return analyzeIncident(incident, retries - 1, delay * 1.5);
     }
-    console.error("Error analyzing incident:", error);
+    logger.error("Error analyzing incident:", error);
     return null;
   }
 }
@@ -572,14 +578,14 @@ export async function chatWithLabAssistant(messages: { role: 'user' | 'model', p
     const fullPrompt = `${systemPrompt}\n\nConversation history:\n${contents}\n\nModel response:`;
 
     const result = await callGemini({
-      model: "gemini-1.5-flash",
+      model: GEMINI_MODEL_VISION,
       contents: fullPrompt
     });
 
     const text = (result.data as any).text;
     return text || "عذراً، لم أتمكن من توليد إجابة.";
   } catch (error) {
-    console.error("Lab Assistant Chat Error:", error);
+    logger.error("Lab Assistant Chat Error:", error);
     return "عذراً، حدث خطأ أثناء الاتصال بالمساعد الذكي. يرجى المحاولة لاحقاً.";
   }
 }
@@ -592,7 +598,7 @@ export async function analyzeLabImage(base64Image: string) {
     const callGemini = httpsCallable(functions, 'generateContent');
     
     const result = await callGemini({
-      model: "gemini-1.5-flash",
+      model: GEMINI_MODEL_VISION,
       contents: [
         {
           role: "user",
@@ -615,7 +621,7 @@ export async function analyzeLabImage(base64Image: string) {
     const text = (result.data as any).text;
     return JSON.parse(text || '{}');
   } catch (error) {
-    console.error("AI Image Analysis Error:", error);
+    logger.error("AI Image Analysis Error:", error);
     return null;
   }
 }
@@ -635,7 +641,7 @@ export async function analyzeExperiment(expData: any, retries = 3, delay = 5000)
     const callGemini = httpsCallable(functions, 'generateContent');
     
     const response = await callGemini({
-      model: "gemini-3-flash-preview",
+      model: GEMINI_MODEL,
       contents: `You are an expert laboratory technician in Algeria. 
       Review this laboratory experiment and provide a professional summary and safety guidance.
       
@@ -682,7 +688,7 @@ export async function analyzeExperiment(expData: any, retries = 3, delay = 5000)
       await new Promise(resolve => setTimeout(resolve, delay));
       return analyzeExperiment(expData, retries - 1, delay * 1.5);
     }
-    console.error("Error analyzing experiment:", error);
+    logger.error("Error analyzing experiment:", error);
     return null;
   }
 }

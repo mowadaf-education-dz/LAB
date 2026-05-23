@@ -6,21 +6,29 @@ import { getAnalytics } from 'firebase/analytics';
 import { getFunctions } from 'firebase/functions';
 import firebaseConfig from '../firebase-applet-config.json';
 
+// ── Logger داخلي لـ firebase.ts (يتجنب الاستيراد الدائري من loggingService) ──
+const _isDev = import.meta.env.DEV;
+const fbLog   = (...a: unknown[]) => { if (_isDev) console.log(...a); };
+const fbWarn  = (...a: unknown[]) => { if (_isDev) console.warn(...a); };
+const fbError = (...a: unknown[]) => { if (_isDev) console.error(...a); };
+// ──────────────────────────────────────────────────────────────────────────
+
+
 // Initialize Firebase SDK
 const app = initializeApp(firebaseConfig);
 export const functions = getFunctions(app);
 
 // Initialize Firestore with explicit database ID from config if present
 const databaseId = (firebaseConfig as any).firestoreDatabaseId || '(default)';
-console.log('[Firebase Info] Project ID:', firebaseConfig.projectId);
-console.log('[Firebase Info] Database ID:', databaseId);
+fbLog('[Firebase Info] Project ID:', firebaseConfig.projectId);
+fbLog('[Firebase Info] Database ID:', databaseId);
 
 let dbInstance;
 try {
   dbInstance = initializeFirestore(app, {
     localCache: persistentLocalCache()
   }, databaseId);
-  console.log('[Firebase Info] Initialized Firestore explicitly with DB ID:', databaseId);
+  fbLog('[Firebase Info] Initialized Firestore explicitly with DB ID:', databaseId);
 } catch (e: any) {
   if (e.message.includes('already been initialized')) {
     dbInstance = getFirestore(app, databaseId);
@@ -40,7 +48,7 @@ export const analytics = (() => {
     }
     return null;
   } catch (error) {
-    console.warn('Firebase Analytics failed to initialize:', error);
+    fbWarn('Firebase Analytics failed to initialize:', error);
     return null;
   }
 })();
@@ -53,7 +61,7 @@ export const auth = getAuth(app);
 // Set persistence to LOCAL to handle mobile redirects better
 if (typeof window !== 'undefined') {
   setPersistence(auth, browserLocalPersistence).catch((err) => {
-    console.error("Error setting persistence:", err);
+    fbError("Error setting persistence:", err);
   });
 }
 
@@ -65,7 +73,7 @@ export async function checkIsAdmin(user: any): Promise<boolean> {
     const idTokenResult = await user.getIdTokenResult();
     return !!idTokenResult.claims.admin;
   } catch (error) {
-    console.error("Error checking admin claim:", error);
+    fbError("Error checking admin claim:", error);
     return false;
   }
 }
@@ -79,10 +87,10 @@ export async function testFirestoreConnection(retries = 3) {
     try {
       const testDoc = doc(db, '_connection_test_', 'connectivity_check');
       await getDocFromServer(testDoc);
-      console.log(`Firebase: Connection test passed (attempt ${i + 1}).`);
+      fbLog(`Firebase: Connection test passed (attempt ${i + 1}).`);
       return true;
     } catch (error: any) {
-      console.warn(`Firebase: Connection test attempt ${i + 1} failed:`, error.message);
+      fbWarn(`Firebase: Connection test attempt ${i + 1} failed:`, error.message);
       
       // If we are reaching the server but blocked by rules, we are connected!
       const errStr = (error.message || '').toLowerCase();
@@ -93,17 +101,17 @@ export async function testFirestoreConnection(retries = 3) {
           errStr.includes('missing or insufficient') ||
           errCode === 'unauthenticated' ||
           errCode === 'failed-precondition' ) {
-        console.log(`Firebase: Connection test passed via permission denial (server reached).`);
+        fbLog(`Firebase: Connection test passed via permission denial (server reached).`);
         return true;
       }
 
       // If we are on the last attempt and it failed
       if (i === retries - 1) {
         const databaseId = (db as any)._databaseId?.database || 'Unknown';
-        console.error('Firebase: All connection attempts failed.');
+        fbError('Firebase: All connection attempts failed.');
         if (error.message.includes('the client is offline')) {
-          console.error(`CRITICAL: Connection timed out or database not found. Target Database: "${databaseId}".`);
-          console.error("Please verify that this Database ID exists in your Firebase Console (Enterprise Edition).");
+          fbError(`CRITICAL: Connection timed out or database not found. Target Database: "${databaseId}".`);
+          fbError("Please verify that this Database ID exists in your Firebase Console (Enterprise Edition).");
         }
         return false;
       }
@@ -121,11 +129,11 @@ export async function testFirestoreConnection(retries = 3) {
  */
 export const getUserCollection = (schoolId: string, collectionName: string) => {
   if (!auth.currentUser) {
-    console.error("DEBUG: getUserCollection called without auth.currentUser. Collection:", collectionName);
+    fbError("DEBUG: getUserCollection called without auth.currentUser. Collection:", collectionName);
     throw new Error("User must be authenticated to access personal data");
   }
   const path = `schools/${schoolId}/${collectionName}`;
-  console.log(`DEBUG: Getting collection at path: ${path}`);
+  fbLog(`DEBUG: Getting collection at path: ${path}`);
   return collection(db, 'schools', schoolId, collectionName);
 };
 
@@ -163,7 +171,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errorMessage = error instanceof Error ? error.message : String(error);
   const currentUid = auth.currentUser?.uid;
   
-  console.error("DEBUG FLOG: handleFirestoreError called.", { 
+  fbError("DEBUG FLOG: handleFirestoreError called.", { 
     operationType, 
     path, 
     currentUid, 
@@ -189,7 +197,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
   if (errorMessage.includes('the client is offline') || errorMessage.includes('Failed to get document from cache')) {
     const offlineMsg = "أنت في وضع عدم الاتصال (Offline). يتم استخدام البيانات المحفوظة محلياً، وسيتم المزامنة تلقائياً عند عودة الاتصال.";
-    console.log(offlineMsg);
+    fbLog(offlineMsg);
     
     // We still throw an error so the calling function knows the operation couldn't fully complete via network (if it was forcing network), 
     // but with a friendly message instead of a scary configuration warning.
@@ -220,7 +228,7 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
     operationType,
     path
   }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  fbError('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }
 

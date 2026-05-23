@@ -119,7 +119,7 @@ export default function App() {
           <Router>
             <OfflineBanner />
             {user && connectionError && (
-              <div className="fixed bottom-4 right-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-bounce max-w-sm">
+              <div className="fixed bottom-4 right-4 z-[100] bg-error text-on-error px-6 py-4 rounded-2xl shadow-2xl flex flex-col gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300 max-w-sm">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-black">{connectionError}</span>
                   <button onClick={() => setConnectionError(null)} className="opacity-50 hover:opacity-100">✕</button>
@@ -134,6 +134,7 @@ export default function App() {
             )}
             {user && !setupComplete && <FirebaseSetup onComplete={() => setSetupComplete(true)} />}
             
+            <ErrorBoundary>
             <Suspense fallback={
               <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
                 <div className="w-16 h-16 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></div>
@@ -184,8 +185,6 @@ export default function App() {
                 <Route path="lab-schedule" element={<LabSchedule />} />
                 <Route path="lab-experiments" element={<LabExperiments />} />
                 <Route path="lab-assistant" element={<LabAssistant />} />
-                <Route path="smart-forms" element={<SmartForms />} />
-                <Route path="backup-center" element={<BackupCenter />} />
                 <Route path="pedagogical-tracking" element={<PedagogicalTracking />} />
                 <Route path="follow-up-registry" element={<FollowUpRegistry />} />
                 <Route path="sync" element={<Sync />} />
@@ -212,7 +211,7 @@ export default function App() {
             </Routes>
             ) : (
               <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
-                <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center animate-bounce">
+                <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center">
                   <div className="w-12 h-12 bg-primary rounded-2xl animate-pulse"></div>
                 </div>
                 <div className="text-xl font-black text-primary animate-pulse">جاري تهيئة النظام...</div>
@@ -220,6 +219,7 @@ export default function App() {
               </div>
             )}
           </Suspense>
+            </ErrorBoundary>
           </Router>
         </SchoolProvider>
       </ErrorBoundary>
